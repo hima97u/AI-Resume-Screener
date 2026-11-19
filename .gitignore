@@ -1,0 +1,5 @@
+virt-ENV/
+build/
+dist/
+*.spec
+__pycache__/
