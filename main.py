@@ -113,6 +113,32 @@ class ResumeScreenerEngine:
         "contact", "personal", "details", "information", "experience", "education",
         "skills", "projects", "certifications", "achievements", "about", "me",
         "professional", "work", "history", "employment", "portfolio", "page",
+        "academic", "career", "professional", "qualification", "qualifications",
+        "publications", "publication", "languages", "language", "interests",
+        "hobbies", "strengths", "weaknesses", "references", "declaration",
+        "extra", "extracurricular", "activities", "awards", "accomplishments",
+        # Degree and education words
+        "bachelor", "bachelors", "bachelor's", "master", "masters", "master's",
+        "doctor", "doctoral", "doctorate", "phd", "phd.", "dphil",
+        "btech", "btech.", "btech,", "mtech", "mtech.", "mtech,", "b.e", "m.e",
+        "bsc", "b.s.c", "msc", "m.s.c", "bca", "mca", "bba", "mba", "mbbs",
+        "bcom", "mcom", "ba", "ma", "undergraduate", "postgraduate",
+        "associate", "diploma", "polytechnic", "degree", "major", "minor",
+        "technology", "science", "engineering", "computer", "information",
+        "electronics", "electrical", "mechanical", "civil", "chemical",
+        "arts", "commerce", "management", "administration", "accounting",
+        "computerapplications", "applied", "studies", "honours", "honors",
+        # Institutions and academic organisations
+        "university", "universities", "college", "colleges", "institute",
+        "institutes", "institution", "institutions", "school", "academy",
+        "schoolof", "department", "faculty", "campus", "board",
+        "national", "international", "private", "public",
+        # Common header fillers and contact labels
+        "name", "candidate", "applicant", "email", "phone", "mobile", "tel",
+        "telephone", "address", "location", "city", "state", "country",
+        "linkedin", "github", "gitlab", "portfolio", "website", "portfolio",
+        "dob", "date", "birth", "gender", "nationality", "passport",
+        "of", "and", "for", "in", "at", "with", "from", "to", "the",
         # Job title words
         "engineer", "developer", "manager", "analyst", "scientist", "architect",
         "consultant", "intern", "specialist", "director", "lead", "senior",
@@ -120,7 +146,8 @@ class ResumeScreenerEngine:
         "executive", "officer", "president", "head", "vp", "full", "stack",
         "software", "data", "product", "project", "human", "resources", "hr",
         "marketing", "sales", "finance", "business", "operations", "cloud",
-        "devops", "qa", "tester", "researcher", "phd", "mba",
+        "devops", "qa", "tester", "researcher", "web", "mobile", "backend",
+        "frontend", "database", "network", "security", "support",
     }
 
     EDUCATION_LEVELS: list[tuple[int, str, re.Pattern]] = [
@@ -203,7 +230,7 @@ class ResumeScreenerEngine:
                 continue
             if len(re.findall(r"\d", line)) >= 4:
                 continue
-            if segment := re.split(r"[|•·–—]| - ", line)[0].strip():
+            if segment := re.split(r"[|•·–—,]| - ", line)[0].strip():
                 lines.append(segment)
         return lines
 
@@ -214,7 +241,11 @@ class ResumeScreenerEngine:
             for node in tree:
                 if isinstance(node, Tree) and node.label() == "PERSON":
                     tokens = [tok for tok, _ in node.leaves()]
-                    if self._is_valid_name_tokens(tokens):
+                    if self._is_valid_name_tokens(tokens, allow_single=True):
+                        if len(tokens) == 1:
+                            line_tokens = re.findall(r"[A-Za-z][A-Za-z'\-.]*", line)
+                            if self._is_valid_name_tokens(line_tokens, allow_single=True):
+                                return " ".join(line_tokens)
                         return " ".join(tokens)
         except Exception:
             pass
@@ -222,7 +253,7 @@ class ResumeScreenerEngine:
 
     def _extract_name_heuristic(self, line: str) -> str | None:
         tokens = re.sub(r"^[^A-Za-z]+|[^A-Za-z]+$", "", line).split()
-        if not self._is_valid_name_tokens(tokens):
+        if not self._is_valid_name_tokens(tokens, allow_single=True):
             return None
         if not all(re.fullmatch(r"[A-Za-z][A-Za-z'\-\.]*", t) for t in tokens):
             return None
@@ -230,12 +261,15 @@ class ResumeScreenerEngine:
         probe = [t.title() if t.isupper() else t for t in tokens]
         try:
             nnp_count = sum(1 for _, tag in pos_tag(probe) if tag in ("NNP", "NNPS"))
+            if len(tokens) == 1:
+                return " ".join(probe) if len(tokens[0]) >= 3 else None
             return " ".join(probe) if nnp_count >= max(1, len(tokens) - 1) else None
         except Exception:
             return " ".join(probe)
 
-    def _is_valid_name_tokens(self, tokens: list[str]) -> bool:
-        if not (2 <= len(tokens) <= 4):
+    def _is_valid_name_tokens(self, tokens: list[str], allow_single: bool = False) -> bool:
+        min_len = 1 if allow_single else 2
+        if not (min_len <= len(tokens) <= 4):
             return False
         words = [re.sub(r"[^a-z]", "", t.lower()) for t in tokens]
         return all(words) and not any(w in self.IGNORED_NAME_WORDS for w in words)
